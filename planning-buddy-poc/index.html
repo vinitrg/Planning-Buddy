@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planning Buddy - Gmail JIRA Parser POC</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Planning Buddy - JIRA Ticket Finder</h1>
+            <p class="subtitle">Find all JIRA tickets mentioned in your Gmail (last 7 days)</p>
+        </header>
+
+        <!-- Auth Section -->
+        <div id="auth-section">
+            <button id="authorize-button" style="display: none;">Sign In with Google</button>
+            <button id="signout-button" style="display: none;">Sign Out</button>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="status-message"></div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading" style="display: none;">
+            <span>Fetching emails...</span>
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" style="display: none;">
+            <h2>Found JIRA Tickets</h2>
+            <div id="summary"></div>
+            <table id="results-table">
+                <thead>
+                    <tr>
+                        <th>Ticket Number</th>
+                        <th>Email Subject</th>
+                        <th>From</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error-section" class="error" style="display: none;"></div>
+    </div>
+
+    <!-- Load config first -->
+    <script src="config.js"></script>
+    
+    <!-- Google API initialization inline -->
+    <script>
+        // Global variables
+        let authorizeButton, signoutButton, statusMessage, loadingDiv, resultsSection, errorSection;
+        let gapiInited = false;
+        let gisInited = false;
+        let accessToken = null;
+
+        // Wait for DOM to load
+        document.addEventListener('DOMContentLoaded', function() {
+            authorizeButton = document.getElementById('authorize-button');
+            signoutButton = document.getElementById('signout-button');
+            statusMessage = document.getElementById('status-message');
+            loadingDiv = document.getElementById('loading');
+            resultsSection = document.getElementById('results-section');
+            errorSection = document.getElementById('error-section');
+        });
+
+        // Callback after api.js is loaded
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        // Callback after the API client is loaded
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: CONFIG.API_KEY,
+                discoveryDocs: CONFIG.DISCOVERY_DOCS,
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        // Callback after Google Identity Services are loaded
+        function gisLoaded() {
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        // Enables user interaction after all libraries have loaded
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited && authorizeButton) {
+                authorizeButton.style.display = 'block';
+                authorizeButton.onclick = handleAuthClick;
+                signoutButton.onclick = handleSignoutClick;
+            }
+        }
+
+        // Sign in the user upon button click
+        function handleAuthClick() {
+            const tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.CLIENT_ID,
+                scope: CONFIG.SCOPES,
+                callback: (response) => {
+                    if (response.error !== undefined) {
+                        showError('Authorization failed: ' + response.error);
+                        return;
+                    }
+                    
+                    accessToken = response.access_token;
+                    updateSigninStatus(true);
+                    fetchAndParseEmails();
+                },
+            });
+
+            if (accessToken === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        // Sign out the user upon button click
+        function handleSignoutClick() {
+            if (accessToken) {
+                google.accounts.oauth2.revoke(accessToken);
+                accessToken = null;
+            }
+            
+            updateSigninStatus(false);
+            statusMessage.textContent = 'Signed out successfully';
+            resultsSection.style.display = 'none';
+            clearError();
+        }
+
+        // Update the sign-in status and button visibility
+        function updateSigninStatus(isSignedIn) {
+            if (isSignedIn) {
+                authorizeButton.style.display = 'none';
+                signoutButton.style.display = 'block';
+            } else {
+                authorizeButton.style.display = 'block';
+                signoutButton.style.display = 'none';
+                resultsSection.style.display = 'none';
+            }
+        }
+
+        // Main function to fetch and parse emails
+        async function fetchAndParseEmails() {
+            showLoading(true);
+            clearError();
+            
+            try {
+                gapi.client.setToken({access_token: accessToken});
+                
+                const date = new Date();
+                date.setDate(date.getDate() - 7);
+                const after = date.toISOString().split('T')[0];
+                
+                statusMessage.textContent = `Fetching emails from last 7 days...`;
+                
+                const response = await gapi.client.gmail.users.messages.list({
+                    'userId': 'me',
+                    'q': `after:${after}`,
+                    'maxResults': 100
+                });
+                
+                if (!response.result.messages) {
+                    showStatus('No emails found in the last 7 days');
+                    showLoading(false);
+                    return;
+                }
+                
+                statusMessage.textContent = `Found ${response.result.messages.length} emails, parsing for JIRA tickets...`;
+                
+                const ticketData = [];
+                const processedTickets = new Set();
+                
+                for (const message of response.result.messages) {
+                    const fullMessage = await gapi.client.gmail.users.messages.get({
+                        'userId': 'me',
+                        'id': message.id
+                    });
+                    
+                    const parsed = parseEmailForJira(fullMessage.result);
+                    
+                    parsed.tickets.forEach(ticket => {
+                        const ticketKey = `${ticket}-${parsed.subject}`;
+                        if (!processedTickets.has(ticketKey)) {
+                            processedTickets.add(ticketKey);
+                            ticketData.push({
+                                ticket: ticket,
+                                subject: parsed.subject,
+                                from: parsed.from,
+                                date: parsed.date
+                            });
+                        }
+                    });
+                }
+                
+                displayResults(ticketData);
+                
+            } catch (error) {
+                showError('Error fetching emails: ' + error.message);
+                console.error('Full error:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Parse individual email for JIRA tickets
+        function parseEmailForJira(message) {
+            const headers = message.payload.headers;
+            const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
+            const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
+            const date = headers.find(h => h.name === 'Date')?.value || '';
+            
+            let body = '';
+            
+            function extractBody(payload) {
+                if (payload.body?.data) {
+                    try {
+                        return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                    } catch (e) {
+                        return '';
+                    }
+                }
+                if (payload.parts) {
+                    return payload.parts.map(part => extractBody(part)).join(' ');
+                }
+                return '';
+            }
+            
+            body = extractBody(message.payload);
+            const searchText = `${subject} ${body}`;
+            const jiraPattern = /\b(BDC-|BM-)\d+\b/g;
+            const tickets = searchText.match(jiraPattern) || [];
+            
+            return {
+                tickets: [...new Set(tickets)],
+                subject: subject,
+                from: from.replace(/<.*>/, '').trim(),
+                date: new Date(date).toLocaleDateString()
+            };
+        }
+
+        // Display results in table
+        function displayResults(ticketData) {
+            const tbody = document.getElementById('results-body');
+            const summary = document.getElementById('summary');
+            
+            tbody.innerHTML = '';
+            
+            if (ticketData.length === 0) {
+                summary.textContent = 'No JIRA tickets found in recent emails';
+                resultsSection.style.display = 'block';
+                return;
+            }
+            
+            const uniqueTickets = new Set(ticketData.map(t => t.ticket));
+            summary.textContent = `Found ${uniqueTickets.size} unique JIRA tickets in ${ticketData.length} email references`;
+            
+            ticketData.forEach(item => {
+                const row = tbody.insertRow();
+                const ticketUrl = `${CONFIG.JIRA_BASE_URL}/${item.ticket}`;
+                row.innerHTML = `
+                    <td class="ticket-id"><a href="${ticketUrl}" target="_blank" rel="noopener noreferrer">${item.ticket}</a></td>
+                    <td>${item.subject}</td>
+                    <td>${item.from}</td>
+                    <td>${item.date}</td>
+                `;
+            });
+            
+            resultsSection.style.display = 'block';
+            statusMessage.textContent = 'Email parsing complete!';
+        }
+
+        // UI Helper functions
+        function showLoading(show) {
+            loadingDiv.style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            errorSection.textContent = message;
+            errorSection.style.display = 'block';
+        }
+
+        function clearError() {
+            errorSection.style.display = 'none';
+        }
+
+        function showStatus(message) {
+            statusMessage.textContent = message;
+        }
+    </script>
+    
+    <!-- Load Google APIs -->
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+</html>

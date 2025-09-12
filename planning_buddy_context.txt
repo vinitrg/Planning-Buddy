@@ -1,0 +1,92 @@
+PLANNING BUDDY APP - PROJECT CONTEXT
+=====================================
+
+PROJECT OVERVIEW:
+- Simple planning assistant app for Product Managers based on 1-Minute Manager principles
+- Connects to Google Drive, Gmail, Google Calendar only
+- Automatically identifies what needs to be worked on using Eisenhower Matrix
+- Focus on habit formation and behavior change from reactive (Q1-heavy) to strategic (Q2-focused)
+
+CORE BEHAVIORAL FRAMEWORK:
+- Current Reality: 80% Q1 (urgent/important), 20% everything else
+- Target Distribution: 50% Q2, 30% Q1, 15% Q3, 5% Q4
+- Success Metric: Increasing Q2 task completions
+- Reward System: 20 Q2 completions = sandwich reward 🥪
+
+EISENHOWER MATRIX INTEGRATION:
+- Q1: Urgent + Important (fires to fight)
+- Q2: Important, Not Urgent (strategic work) - PRIMARY FOCUS
+- Q3: Urgent, Not Important (interruptions)  
+- Q4: Neither urgent nor important (busy work)
+
+TASK MANAGEMENT:
+- No artificial goal limits - track all goals equally initially
+- Priority levels: Critical/High/Med/Low
+- Task flagging: 2 days no progress = flagged for visibility
+- Time estimation habit formation: prompt after 2-3 days
+- Overdue concern: 2 days past due date
+
+OVERWHELM DETECTION:
+- Task overdue + no action taken
+- No time estimate provided (requires investigation)
+- Smart response: Ask why no estimate (complex/unclear/exploratory)
+
+APP INTERACTIONS:
+Weekly - Monday 11:00 AM Planning:
+- Duration: 30 minutes initially, reduce to 15 minutes eventually
+- Review last week's Q1/Q2/Q3/Q4 distribution
+- Alert if no Q2 tasks planned for new week
+- Set priorities and categories for upcoming tasks
+- Track progress toward ideal distribution
+
+Daily - 10:30 AM Notification:
+- Show today's priorities (simple list to start)
+- Include context from week's goals
+- Highlight Critical tasks
+- Suggest Q2 focus when appropriate
+- Post-MVP: Add conversational elements
+
+Focus Time (12-5 PM):
+- "What's the 5-minute piece?" breakdown approach
+- Overwhelm intervention protocols
+
+End of Day:
+- Progress tracking and Q2 completion celebration
+
+Weekend:
+- Gentle reminders (not intrusive)
+
+GOOGLE INTEGRATIONS:
+- Google Drive: PRDs, planning docs, meeting notes (optional storage)
+- Gmail: JIRA ticket number parsing, commitment tracking
+- Google Calendar: Meetings, deadlines, focus time blocks
+
+HABIT FORMATION AREAS:
+- Time estimation (primary - never done currently)
+- Q2 strategic work focus
+- Weekly planning consistency
+- 5-minute task breakdown when overwhelmed
+- Additional habits to be documented separately
+
+TECHNICAL APPROACH:
+- Simple list interface initially
+- Pattern learning for task categorization
+- Visual distribution tracking (Q1/Q2/Q3/Q4)
+- Celebration/reward system integration
+- Conversational interface (post-MVP)
+
+ONE-MINUTE MANAGER PRINCIPLES:
+- Clear, brief goals
+- Immediate feedback/celebration
+- Quick course correction when overwhelmed
+- Focus on one thing at a time during overwhelm
+
+DEVELOPMENT PHASES:
+MVP: Simple lists, basic categorization, Google integrations
+Post-MVP: Conversational interface, advanced habit formation
+
+CURRENT STATUS: Brainstorming and design phase complete
+NEXT STEPS: Technical implementation planning
+
+---
+Last updated: 2025-09-11
