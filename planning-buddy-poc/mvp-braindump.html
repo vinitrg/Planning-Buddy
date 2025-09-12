@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planning Buddy - Brain Dump</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #2c3e50;
+        }
+
+        .back-btn {
+            padding: 0.5rem 1rem;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-btn:hover {
+            background: #5a6268;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        /* Brain Dump Section */
+        .braindump-section {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .section-subtitle {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .braindump-textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 1rem;
+            border: 2px solid #e0e6ed;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        .braindump-textarea:focus {
+            outline: none;
+            border-color: #4285f4;
+        }
+
+        .braindump-textarea::placeholder {
+            color: #adb5bd;
+        }
+
+        .action-buttons {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #4285f4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #357ae8;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+
+        /* Processing Indicator */
+        .processing {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .processing.active {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4285f4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Extracted Tasks Section */
+        .tasks-review-section {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .tasks-review-section.active {
+            display: block;
+        }
+
+        .extracted-tasks {
+            margin-top: 1rem;
+        }
+
+        .task-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .task-item:hover {
+            border-color: #e0e6ed;
+        }
+
+        .task-item.selected {
+            background: #e7f3ff;
+            border-color: #4285f4;
+        }
+
+        .task-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .task-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .task-text {
+            font-size: 1rem;
+            color: #2c3e50;
+        }
+
+        .task-text[contenteditable="true"] {
+            padding: 0.25rem;
+            border: 1px dashed transparent;
+            border-radius: 3px;
+            transition: all 0.3s;
+        }
+
+        .task-text[contenteditable="true"]:hover {
+            background: white;
+            border-color: #ced4da;
+        }
+
+        .task-text[contenteditable="true"]:focus {
+            outline: none;
+            background: white;
+            border-color: #4285f4;
+            border-style: solid;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .edit-hint {
+            font-size: 0.75rem;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        /* Select All Controls */
+        .select-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .select-all-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+
+        .selected-count {
+            color: #4285f4;
+            font-weight: 500;
+        }
+
+        /* Review Actions */
+        .review-actions {
+            margin-top: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1.5rem;
+            border-top: 2px solid #e0e6ed;
+        }
+
+        .help-text {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        /* Examples Section */
+        .examples-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .examples-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #495057;
+        }
+
+        .example-item {
+            margin-bottom: 1rem;
+            padding-left: 1rem;
+            border-left: 3px solid #4285f4;
+        }
+
+        .example-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+        }
+
+        .example-text {
+            font-size: 0.9rem;
+            color: #2c3e50;
+            font-style: italic;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .review-actions {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+
+        /* Touch-friendly for mobile */
+        @media (pointer: coarse) {
+            .task-checkbox {
+                width: 24px;
+                height: 24px;
+            }
+
+            .btn {
+                min-height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>🧠 Brain Dump - Get Everything Out</h1>
+        <a href="mvp-design.html" class="back-btn">← Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <!-- Examples Section -->
+        <div class="examples-section">
+            <div class="examples-title">💡 Tips for Effective Brain Dumping</div>
+            <div class="example-item">
+                <div class="example-label">Example 1 - Meeting Notes</div>
+                <div class="example-text">"Had meeting with Sarah about mobile designs. Need to get engineering feedback by Friday. Also discuss with legal about privacy policy changes. Sprint planning is next Tuesday."</div>
+            </div>
+            <div class="example-item">
+                <div class="example-label">Example 2 - Mixed Thoughts</div>
+                <div class="example-text">"Fix the payment bug ASAP. Research competitor pricing. Schedule 1:1 with John. Q4 roadmap needs updating. Check BDC-456 status with team."</div>
+            </div>
+            <div class="example-item">
+                <div class="example-label">Example 3 - Project Ideas</div>
+                <div class="example-text">"New dashboard metrics needed. Consider ML for recommendation engine. Document API before release. Training plan for new hires next month."</div>
+            </div>
+        </div>
+
+        <!-- Brain Dump Input Section -->
+        <div class="braindump-section">
+            <h2 class="section-title">What's on your mind?</h2>
+            <p class="section-subtitle">
+                Don't worry about structure or formatting. Just dump everything here - meetings, ideas, concerns, reminders. 
+                The AI will help organize it into actionable tasks.
+            </p>
+            
+            <textarea 
+                class="braindump-textarea" 
+                placeholder="Start typing... Examples:
+- Need to review the mobile designs with Sarah
+- Get engineering feedback before sprint planning
+- Check with legal about privacy policy
+- Fix that payment bug from yesterday
+- Research competitor pricing strategies
+- Update Q4 roadmap presentation"
+            ></textarea>
+
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="clearText()">Clear</button>
+                <button class="btn btn-primary" onclick="processText()">🤖 Convert to Tasks</button>
+            </div>
+
+            <!-- Processing Indicator -->
+            <div class="processing" id="processing">
+                <div class="spinner"></div>
+                <p>AI is processing your brain dump...</p>
+                <p style="font-size: 0.85rem; color: #6c757d; margin-top: 0.5rem;">Extracting actionable tasks and identifying deadlines</p>
+            </div>
+        </div>
+
+        <!-- Extracted Tasks Review Section -->
+        <div class="tasks-review-section" id="tasksReview">
+            <h2 class="section-title">Review Extracted Tasks</h2>
+            <p class="section-subtitle">
+                The AI has identified these potential tasks. Review, edit if needed (click on task text), and select which ones to add to your task bucket.
+            </p>
+
+            <div class="select-controls">
+                <label class="select-all-checkbox">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                    <span>Select All</span>
+                </label>
+                <span class="selected-count"><span id="selectedCount">0</span> tasks selected</span>
+            </div>
+
+            <div class="extracted-tasks" id="extractedTasks">
+                <!-- Tasks will be populated here after processing -->
+            </div>
+
+            <div class="review-actions">
+                <div class="help-text">
+                    💡 Tip: Click on any task text to edit it before adding to your bucket
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" onclick="backToEdit()">← Back to Edit</button>
+                    <button class="btn btn-primary" onclick="addSelectedTasks()">Add Selected to Task Bucket →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo JavaScript -->
+    <script>
+        // Sample extracted tasks for demo
+        const sampleTasks = [
+            { text: "Schedule design review meeting with Sarah", deadline: "This week", people: "Sarah" },
+            { text: "Get engineering feedback on mobile designs", deadline: "Friday", people: "Engineering team" },
+            { text: "Prepare for sprint planning meeting", deadline: "Next Tuesday", people: "" },
+            { text: "Check privacy policy changes with legal team", deadline: "", people: "Legal team" },
+            { text: "Fix critical payment gateway bug", deadline: "ASAP", people: "" },
+            { text: "Research competitor pricing strategies", deadline: "", people: "" },
+            { text: "Update Q4 roadmap presentation", deadline: "End of month", people: "" },
+            { text: "Create training plan for new hires", deadline: "Next month", people: "HR" },
+            { text: "Document new API endpoints", deadline: "", people: "" },
+            { text: "Schedule 1:1 meeting with John", deadline: "This week", people: "John" },
+            { text: "Review and approve marketing campaign", deadline: "Thursday", people: "Marketing" },
+            { text: "Investigate performance issues on dashboard", deadline: "", people: "DevOps" },
+            { text: "Plan team retrospective session", deadline: "End of sprint", people: "Entire team" },
+            { text: "Update project status in stakeholder deck", deadline: "Monday", people: "" },
+            { text: "Research new ML framework options", deadline: "", people: "Data Science team" }
+        ];
+
+        function processText() {
+            const textarea = document.querySelector('.braindump-textarea');
+            if (!textarea.value.trim()) {
+                alert('Please enter some text to process');
+                return;
+            }
+
+            // Show processing indicator
+            document.getElementById('processing').classList.add('active');
+            
+            // Simulate AI processing
+            setTimeout(() => {
+                document.getElementById('processing').classList.remove('active');
+                showExtractedTasks();
+            }, 2000);
+        }
+
+        function showExtractedTasks() {
+            const tasksContainer = document.getElementById('extractedTasks');
+            tasksContainer.innerHTML = '';
+
+            // Create task items
+            sampleTasks.forEach((task, index) => {
+                const taskItem = document.createElement('div');
+                taskItem.className = 'task-item';
+                taskItem.innerHTML = `
+                    <input type="checkbox" class="task-checkbox" onchange="updateSelectedCount()">
+                    <div class="task-content">
+                        <div class="task-text" contenteditable="true">${task.text}</div>
+                        <div class="task-meta">
+                            ${task.deadline ? `<span>📅 ${task.deadline}</span>` : ''}
+                            ${task.people ? `<span>👥 ${task.people}</span>` : ''}
+                            <span class="edit-hint">Click to edit</span>
+                        </div>
+                    </div>
+                `;
+                
+                // Add selection toggle on checkbox
+                const checkbox = taskItem.querySelector('.task-checkbox');
+                checkbox.addEventListener('change', function() {
+                    taskItem.classList.toggle('selected', this.checked);
+                });
+
+                tasksContainer.appendChild(taskItem);
+            });
+
+            // Show the review section
+            document.getElementById('tasksReview').classList.add('active');
+            updateSelectedCount();
+
+            // Scroll to review section
+            document.getElementById('tasksReview').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.task-checkbox');
+            const taskItems = document.querySelectorAll('.task-item');
+            
+            checkboxes.forEach((cb, index) => {
+                cb.checked = selectAll.checked;
+                taskItems[index].classList.toggle('selected', selectAll.checked);
+            });
+            
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const checkedCount = document.querySelectorAll('.task-checkbox:checked').length;
+            document.getElementById('selectedCount').textContent = checkedCount;
+        }
+
+        function clearText() {
+            if (confirm('Clear all text? This cannot be undone.')) {
+                document.querySelector('.braindump-textarea').value = '';
+                document.getElementById('tasksReview').classList.remove('active');
+            }
+        }
+
+        function backToEdit() {
+            document.getElementById('tasksReview').classList.remove('active');
+            document.querySelector('.braindump-textarea').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function addSelectedTasks() {
+            const selectedCount = document.querySelectorAll('.task-checkbox:checked').length;
+            if (selectedCount === 0) {
+                alert('Please select at least one task to add');
+                return;
+            }
+            
+            alert(`${selectedCount} tasks would be added to your Uncategorized bucket. You'll need to categorize them into Q1/Q2/Q3/Q4 before working on them.`);
+            
+            // In real app, would redirect to dashboard
+            window.location.href = 'mvp-design.html';
+        }
+
+        // Make task text editable
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('task-text')) {
+                e.target.focus();
+            }
+        });
+    </script>
+</body>
+</html>
