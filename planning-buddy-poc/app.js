@@ -346,7 +346,7 @@ class PlanningBuddyApp {
     }
 
     editTask(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
+        const task = this.db.getTaskById(taskId);
         if (!task) return;
         
         const newTitle = prompt('Edit task title:', task.title);
