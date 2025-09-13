@@ -1,0 +1,238 @@
+# Planning Buddy - Complete Context & Implementation
+
+## Project Overview
+A Planning Buddy app for Product Managers that integrates Gmail JIRA parsing, Google Drive docs, and Google Calendar using the Eisenhower Matrix (Q1/Q2/Q3/Q4) for task categorization. Built with vanilla HTML/CSS/JavaScript and localStorage.
+
+## Core Concept
+Based on 1-Minute Manager principles with focus on shifting from 80% Q1 (urgent/important) work to 50% Q2 (important/not urgent) strategic work. Includes reward system: earn a sandwich after completing 20 Q2 tasks.
+
+## File Structure
+
+### Core Files
+- **app.html** - Main application UI with complete Eisenhower Matrix dashboard
+- **app.js** - Core application logic with PlanningBuddyApp class
+- **database.js** - localStorage database layer with comprehensive data models
+- **config.js** - Google OAuth credentials and JIRA base URL configuration
+- **sample-data.js** - Development sample data with dev controls
+
+### Design Files
+- **mvp-design.html** - Complete UI/UX design mockup showing ideal app layout
+- **mvp-braindump.html** - Brain dump interface for capturing unstructured thoughts
+- **mvp-archive.html** - Archive interface for completed tasks
+
+### Development Files
+- **index.html** - Original JIRA POC demonstrating Gmail OAuth integration
+
+## Technical Implementation
+
+### Database Layer (database.js)
+Complete localStorage wrapper with:
+- **Task Factory**: Standardized task creation with all required fields
+- **Duplicate Resolution**: Automatic handling based on JIRA tickets and timestamps
+- **Delta Sync**: Incremental sync with 24-hour safety net
+- **Batch Operations**: Efficient JIRA ticket processing
+- **Statistics**: Q2 progress tracking and analytics
+
+### Task Data Model
+```javascript
+{
+  id: 'task_timestamp_random',
+  title: 'Fix production bug',
+  
+  // Origin & Source tracking
+  origin: 'jira|braindump|manual',
+  source: 'jira|manual',
+  jiraTicket: 'BDC-123',
+  jiraUrl: 'https://procoretech.atlassian.net/browse/BDC-123',
+  
+  // Eisenhower Matrix categorization
+  quadrant: 'uncategorized|q1|q2|q3|q4',
+  priority: 'low|medium|high',
+  status: 'active|completed',
+  
+  // Comprehensive timestamps
+  dateCreated: '2024-01-15T10:30:00.000Z',
+  dateUpdated: '2024-01-15T14:20:00.000Z',
+  dateCompleted: null,
+  dateArchived: null,
+  
+  // Sync metadata for duplicate resolution
+  syncOriginTimestamp: '2024-01-15T10:30:00.000Z',
+  lastSyncedAt: '2024-01-15T10:30:00.000Z',
+  syncVersion: 1
+}
+```
+
+### Sync Metadata Model
+```javascript
+{
+  lastJiraSync: '2024-01-15T10:30:00.000Z',
+  lastSuccessfulSync: '2024-01-15T10:30:00.000Z',
+  syncInProgress: false,
+  lastSyncError: null,
+  failedSyncAttempts: 0,
+  initialSyncDays: 7,
+  safetyNetHours: 24,
+  statsLastCalculated: '2024-01-15T10:30:00.000Z',
+  totalTasksProcessed: 147,
+  duplicatesResolved: 12
+}
+```
+
+## Authentication System
+
+### Google OAuth Configuration
+- **Client ID**: '488837968104-ihds1c98c2evghf4v1ktji9h3pugiqoe.apps.googleusercontent.com'
+- **Scope**: 'https://www.googleapis.com/auth/gmail.readonly'
+- **Library**: Google Identity Services (GIS) - modern replacement for deprecated gapi.auth2
+- **API**: Gmail API for email parsing
+
+### JIRA Integration
+- **Base URL**: 'https://procoretech.atlassian.net/browse'
+- **Pattern**: `/\b(BDC-|BM-)\d+\b/g` - only extracts tickets starting with BDC- or BM-
+- **Auto-linking**: Generates clickable links to JIRA tickets
+
+## Streamlined JIRA Sync Flow
+
+### User Experience
+1. Click "📧 Sync JIRA from Gmail (Last: X ago)"
+2. UI becomes disabled with processing status
+3. Google OAuth opens automatically if not signed in
+4. Progress shown: "Searching emails since [date]..."
+5. Tasks automatically added to Uncategorized bucket
+6. Success message with duplicate resolution results
+7. UI re-enables with updated sync time
+
+### Technical Flow
+1. **Authentication**: Google Identity Services with automatic token management
+2. **Delta Sync**: Only processes emails since last sync (with 24h safety net)
+3. **Email Processing**: Parses Gmail messages for BDC-/BM- JIRA tickets
+4. **Duplicate Resolution**: Removes older versions, adds newer to uncategorized
+5. **Batch Processing**: Efficient database operations
+6. **Metadata Update**: Records sync time regardless of results found
+
+### Duplicate Resolution Strategy
+- **Detection**: Based on JIRA ticket numbers
+- **Resolution**: Keep newer version (by syncOriginTimestamp), remove older
+- **Reset**: Newer version always goes to uncategorized (loses original categorization)
+- **Tracking**: Counts resolved duplicates in sync metadata
+
+## UI Features
+
+### Processing States
+- **Loading**: Blue background with spinner animation
+- **Success**: Green background with ✅ checkmark
+- **Error**: Red background with error details
+- **Disabled**: All buttons disabled with opacity changes during processing
+
+### Last Sync Display
+- **Button Text**: Shows "Last: X minutes/hours/days ago" or "Never synced"
+- **Console Command**: `checkLastSync()` for detailed sync information
+- **Automatic Updates**: Refreshes after every sync attempt
+
+### Visual Feedback
+```css
+.processing-status.active { background: #e7f3ff; color: #0056b3; }
+.processing-status.success { background: #d4edda; color: #155724; }
+.processing-status.error { background: #f8d7da; color: #721c24; }
+.spinner { animation: spin 1s linear infinite; }
+```
+
+## Error Handling
+
+### Common Issues Resolved
+1. **Cross-Origin-Opener-Policy warnings**: Harmless browser security warnings from Google's auth library
+2. **Access token management**: Uses Google Identity Services consistently
+3. **Database initialization**: Robust fallbacks for missing data
+4. **UI state management**: Proper cleanup of processing states
+
+### Error Recovery
+- **Auth failures**: Clear error messages with retry capability
+- **Network issues**: Graceful degradation with user feedback
+- **Data corruption**: Database re-initialization safeguards
+
+## Development Features
+
+### Sample Data System
+- **Load Sample Data**: Populates 14 realistic PM tasks across all quadrants
+- **Clear All Data**: Removes all localStorage data
+- **Dev Controls**: Only visible on localhost for development
+
+### Console Utilities
+- **checkLastSync()**: Detailed sync information and statistics
+- **window.planningBuddyDB**: Direct access to database layer
+- **Comprehensive logging**: Automatic sync details in console
+
+## Performance Optimizations
+
+### Database Operations
+- **Batch processing**: Multiple tasks processed in single operation
+- **Lazy loading**: Statistics calculated on demand
+- **Efficient queries**: Optimized quadrant filtering and search
+
+### UI Rendering
+- **Incremental updates**: Only re-render affected sections
+- **Event delegation**: Efficient event handling
+- **Responsive design**: Mobile-optimized with touch targets
+
+## Future Extensibility
+
+### Planned Integrations
+- **Google Drive**: Document connection for task context
+- **Google Calendar**: Scheduling and time blocking
+- **Brain Dump AI**: Natural language task extraction
+- **Advanced Analytics**: Behavioral change tracking
+
+### Architecture Benefits
+- **Modular design**: Clean separation between UI, business logic, and data
+- **Database abstraction**: Easy migration to server-side storage
+- **Plugin architecture**: New sync sources can be easily added
+- **Type safety**: Consistent data models throughout
+
+## Security Considerations
+
+### Data Privacy
+- **Local storage only**: No server-side data transmission
+- **Google OAuth**: Secure authentication with minimal scope
+- **No credential storage**: Tokens managed by Google's library
+
+### Best Practices
+- **Input validation**: All user inputs sanitized
+- **Error handling**: No sensitive data in error messages
+- **Scope limitation**: Only requests necessary Gmail permissions
+
+## Browser Compatibility
+
+### Requirements
+- **Modern browsers**: Chrome, Firefox, Safari, Edge
+- **JavaScript ES6+**: Async/await, arrow functions, template literals
+- **localStorage**: Required for data persistence
+- **Fetch API**: For Google API calls
+
+### Testing Environment
+- **Local server**: Python 3 HTTP server on port 8000
+- **CORS handling**: Proper headers for Google API integration
+- **Mobile responsive**: Touch-friendly interface
+
+## Current Status
+
+### Completed Features ✅
+- Complete database layer with comprehensive data models
+- Streamlined JIRA sync with duplicate resolution
+- Real-time processing UI with visual feedback
+- Last sync time tracking and display
+- Delta sync with configurable safety nets
+- Eisenhower Matrix task management
+- Q2 completion tracking with reward system
+- Mobile-responsive design
+- Development tools and sample data
+
+### Known Issues ⚠️
+- Cross-Origin-Opener-Policy warnings (harmless, from Google's library)
+- Requires localhost for Google OAuth (production would need domain verification)
+
+### Next Steps 🚀
+- Brain dump AI processing implementation
+- Archive system with advanced filtering
+- Google Drive and Calendar integration
+- Advanced analytics and behavioral insights
