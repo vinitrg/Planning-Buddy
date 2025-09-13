@@ -2,9 +2,6 @@
 
 class PlanningBuddyApp {
     constructor() {
-        this.tasks = [];
-        this.archivedTasks = [];
-        this.q2CompletedCount = 0;
         this.hideCompleted = true;
         
         // Gmail/JIRA sync properties
@@ -12,6 +9,9 @@ class PlanningBuddyApp {
         this.gisInited = false;
         this.accessToken = null;
         this.discoveredJiraTickets = [];
+        
+        // Initialize database
+        this.db = window.planningBuddyDB;
         
         this.init();
     }
@@ -22,48 +22,46 @@ class PlanningBuddyApp {
         this.renderDashboard();
         this.updateStats();
         this.checkWeeklyPlanning();
+        this.displayLastSyncTime();
     }
 
-    // Data Management
+    // Data Management - Now using database layer
     loadData() {
-        const savedTasks = localStorage.getItem('planningBuddy_tasks');
-        const savedArchived = localStorage.getItem('planningBuddy_archived');
-        const savedQ2Count = localStorage.getItem('planningBuddy_q2Count');
-        
-        if (savedTasks) {
-            this.tasks = JSON.parse(savedTasks);
-        }
-        if (savedArchived) {
-            this.archivedTasks = JSON.parse(savedArchived);
-        }
-        if (savedQ2Count) {
-            this.q2CompletedCount = parseInt(savedQ2Count);
-        }
+        // Database handles initialization and loading
+        // No longer need to manage local arrays
     }
 
     saveData() {
-        localStorage.setItem('planningBuddy_tasks', JSON.stringify(this.tasks));
-        localStorage.setItem('planningBuddy_archived', JSON.stringify(this.archivedTasks));
-        localStorage.setItem('planningBuddy_q2Count', this.q2CompletedCount.toString());
+        // Database handles saving automatically
+        // No longer need manual localStorage management
     }
 
-    // Task Management
-    createTask(title, source = 'manual', jiraTicket = '', quadrant = 'uncategorized', priority = 'medium') {
-        const task = {
-            id: this.generateId(),
+    // Convenience methods to get data from database
+    getTasks() {
+        return this.db.getTasks();
+    }
+
+    getArchivedTasks() {
+        return this.db.getArchivedTasks();
+    }
+
+    getQ2Count() {
+        return this.db.getQ2Count();
+    }
+
+    // Task Management - Updated to use database
+    createTask(title, source = 'manual', jiraTicket = '', quadrant = 'uncategorized', priority = 'medium', origin = 'manual') {
+        const taskData = {
             title: title.trim(),
             source: source,
+            origin: origin,
             jiraTicket: jiraTicket,
             quadrant: quadrant,
             priority: priority,
-            status: 'active',
-            dateCreated: new Date().toISOString(),
-            dateCompleted: null,
-            dateArchived: null
+            status: 'active'
         };
         
-        this.tasks.push(task);
-        this.saveData();
+        const task = this.db.addTask(taskData);
         this.renderDashboard();
         this.updateStats();
         
@@ -71,55 +69,50 @@ class PlanningBuddyApp {
     }
 
     updateTask(taskId, updates) {
-        const taskIndex = this.tasks.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1) {
-            this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updates };
-            this.saveData();
+        const updatedTask = this.db.updateTask(taskId, updates);
+        if (updatedTask) {
             this.renderDashboard();
             this.updateStats();
         }
+        return updatedTask;
     }
 
     deleteTask(taskId) {
-        this.tasks = this.tasks.filter(t => t.id !== taskId);
-        this.saveData();
-        this.renderDashboard();
-        this.updateStats();
+        const deleted = this.db.deleteTask(taskId);
+        if (deleted) {
+            this.renderDashboard();
+            this.updateStats();
+        }
+        return deleted;
     }
 
     completeTask(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
+        const task = this.db.getTaskById(taskId);
         if (task) {
-            task.status = 'completed';
-            task.dateCompleted = new Date().toISOString();
+            const updates = {
+                status: 'completed',
+                dateCompleted: new Date().toISOString()
+            };
+            
+            this.updateTask(taskId, updates);
             
             // Track Q2 completions
             if (task.quadrant === 'q2') {
-                this.q2CompletedCount++;
+                this.db.incrementQ2Count();
             }
             
-            this.saveData();
-            this.renderDashboard();
-            this.updateStats();
             this.updateQ2Counter();
-            
             this.showCompletionMessage(task);
         }
     }
 
     archiveTask(taskId) {
-        const taskIndex = this.tasks.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1) {
-            const task = this.tasks[taskIndex];
-            task.dateArchived = new Date().toISOString();
-            
-            this.archivedTasks.push(task);
-            this.tasks.splice(taskIndex, 1);
-            
-            this.saveData();
+        const archived = this.db.archiveTask(taskId, 'manual');
+        if (archived) {
             this.renderDashboard();
             this.updateStats();
         }
+        return archived;
     }
 
     categorizeTask(taskId, quadrant, priority = 'medium') {
@@ -249,8 +242,9 @@ class PlanningBuddyApp {
 
     // Statistics and Counters
     updateStats() {
-        const activeTasks = this.tasks.filter(t => t.status === 'active');
-        const total = activeTasks.length;
+        const stats = this.db.calculateStats();
+        const activeTasks = stats.activeTasks;
+        const total = activeTasks.total;
         
         if (total === 0) {
             document.getElementById('q1Percent').textContent = '0';
@@ -261,18 +255,11 @@ class PlanningBuddyApp {
             return;
         }
         
-        const counts = {
-            q1: activeTasks.filter(t => t.quadrant === 'q1').length,
-            q2: activeTasks.filter(t => t.quadrant === 'q2').length,
-            q3: activeTasks.filter(t => t.quadrant === 'q3').length,
-            q4: activeTasks.filter(t => t.quadrant === 'q4').length
-        };
-        
         const percentages = {
-            q1: Math.round((counts.q1 / total) * 100),
-            q2: Math.round((counts.q2 / total) * 100),
-            q3: Math.round((counts.q3 / total) * 100),
-            q4: Math.round((counts.q4 / total) * 100)
+            q1: Math.round((activeTasks.q1 / total) * 100),
+            q2: Math.round((activeTasks.q2 / total) * 100),
+            q3: Math.round((activeTasks.q3 / total) * 100),
+            q4: Math.round((activeTasks.q4 / total) * 100)
         };
         
         document.getElementById('q1Percent').textContent = percentages.q1;
@@ -288,9 +275,11 @@ class PlanningBuddyApp {
             q1Warning.style.display = 'none';
         }
         
-        // Update task stats
-        const completedToday = this.tasks.filter(t => 
+        // Update task stats using archived tasks (completed tasks are archived)
+        const archivedTasks = this.db.getArchivedTasks();
+        const completedToday = archivedTasks.filter(t => 
             t.status === 'completed' && 
+            t.dateCompleted &&
             this.isToday(new Date(t.dateCompleted))
         ).length;
         
@@ -310,10 +299,11 @@ class PlanningBuddyApp {
     updateQ2Counter() {
         const counter = document.getElementById('q2Counter');
         const reward = document.getElementById('q2Reward');
+        const q2Count = this.db.getQ2Count();
         
-        counter.textContent = `${this.q2CompletedCount}/20`;
+        counter.textContent = `${q2Count}/20`;
         
-        const remaining = 20 - this.q2CompletedCount;
+        const remaining = 20 - q2Count;
         if (remaining <= 0) {
             reward.textContent = '🎉 You earned a sandwich! 🥪';
         } else {
@@ -496,16 +486,15 @@ class PlanningBuddyApp {
     }
 
     async fetchJiraTicketsFromGmail() {
-        this.showJiraLoading(true);
-        this.showJiraStatus('');
+        // No modal loading - processing state handled by caller
         
         try {
-            gapi.client.setToken({access_token: this.accessToken});
+            // Access token should already be set by the caller
+            // No need to get it again - gapi.client already has the token
             
-            // Calculate date 7 days ago
-            const date = new Date();
-            date.setDate(date.getDate() - 7);
-            const after = date.toISOString().split('T')[0];
+            // Calculate date range for JIRA emails using delta sync
+            const syncTimeRange = this.db.calculateSyncTimeRange();
+            const after = syncTimeRange.toISOString().split('T')[0];
             
             const response = await gapi.client.gmail.users.messages.list({
                 'userId': 'me',
@@ -514,8 +503,7 @@ class PlanningBuddyApp {
             });
             
             if (!response.result.messages) {
-                this.showJiraLoading(false);
-                this.showJiraStatus('No emails found in the last 7 days');
+                this.discoveredJiraTickets = [];
                 return;
             }
             
@@ -546,13 +534,10 @@ class PlanningBuddyApp {
             }
             
             this.discoveredJiraTickets = ticketData;
-            this.showJiraLoading(false);
-            this.displayJiraTickets();
             
         } catch (error) {
-            this.showJiraLoading(false);
-            this.showJiraStatus('Error fetching emails: ' + error.message, 'error');
             console.error('Gmail API Error:', error);
+            throw error; // Re-throw so caller can handle
         }
     }
 
@@ -642,36 +627,47 @@ class PlanningBuddyApp {
             return;
         }
         
-        let addedCount = 0;
+        // Prepare batch of tasks for database
+        const tasksToAdd = [];
         
         checkboxes.forEach(checkbox => {
             const index = parseInt(checkbox.dataset.index);
             const ticketData = this.discoveredJiraTickets[index];
             
-            // Check if this ticket is already in tasks
-            const existingTask = this.tasks.find(t => t.jiraTicket === ticketData.ticket);
-            if (existingTask) {
-                console.log(`Task for ${ticketData.ticket} already exists, skipping`);
-                return;
-            }
-            
-            // Create task from JIRA ticket
-            this.createTask(
-                ticketData.subject.replace(/^(Re:|Fwd?:|\[.*?\])\s*/gi, '').trim(),
-                'jira',
-                ticketData.ticket,
-                'uncategorized',
-                'medium'
-            );
-            
-            addedCount++;
+            // Prepare task data for database (duplicate resolution handled automatically)
+            tasksToAdd.push({
+                title: ticketData.subject.replace(/^(Re:|Fwd?:|\[.*?\])\s*/gi, '').trim(),
+                source: 'jira',
+                origin: 'jira',
+                jiraTicket: ticketData.ticket,
+                quadrant: 'uncategorized',
+                priority: 'medium',
+                syncOriginTimestamp: ticketData.date // Use email date as origin timestamp
+            });
         });
         
-        this.closeJiraModal();
+        // Use database batch add with duplicate resolution
+        const result = this.db.addTasksBatch(tasksToAdd);
         
-        if (addedCount > 0) {
-            alert(`Added ${addedCount} JIRA tasks to your Uncategorized bucket. Please categorize them into Q1/Q2/Q3/Q4.`);
+        this.closeJiraModal();
+        this.renderDashboard();
+        this.updateStats();
+        
+        // Show results
+        let message = `Added ${result.addedTasks.length} JIRA tasks to your Uncategorized bucket.`;
+        if (result.resolvedDuplicates.length > 0) {
+            message += `\n\nDuplicate tickets resolved: ${result.resolvedDuplicates.join(', ')}`;
         }
+        message += '\n\nPlease categorize them into Q1/Q2/Q3/Q4.';
+        
+        alert(message);
+        
+        // Update sync metadata
+        this.db.updateSyncMeta({
+            lastJiraSync: new Date().toISOString(),
+            lastSuccessfulSync: new Date().toISOString(),
+            totalTasksProcessed: this.db.getSyncMeta().totalTasksProcessed + result.totalProcessed
+        });
     }
 
     showJiraLoading(show) {
@@ -689,10 +685,244 @@ class PlanningBuddyApp {
         statusDiv.style.color = type === 'error' ? '#dc3545' : '#6c757d';
     }
 
-    // Navigation and Modal Management
-    showJiraSync() {
-        document.getElementById('jiraModal').classList.add('active');
-        this.maybeEnableJiraSync();
+    // Streamlined JIRA sync - No modal, direct processing
+    async showJiraSync() {
+        // Check if Google APIs are ready
+        if (!this.gapiInited || !this.gisInited) {
+            this.setProcessingState(false, 'Google APIs are still loading. Please try again in a moment.');
+            return;
+        }
+
+        // Additional check for gapi availability
+        if (typeof gapi === 'undefined' || typeof google === 'undefined') {
+            this.setProcessingState(false, 'Google APIs not loaded. Please refresh the page.');
+            return;
+        }
+
+        // Disable UI and show processing state
+        this.setProcessingState(true, 'Connecting to Google...');
+
+        try {
+            // Use Google Identity Services for authentication
+            await new Promise((resolve, reject) => {
+                const tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CONFIG.CLIENT_ID,
+                    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+                    prompt: '', // Don't always prompt for consent
+                    callback: (response) => {
+                        if (response.error !== undefined) {
+                            reject(new Error('Authentication failed: ' + response.error));
+                            return;
+                        }
+                        // Set the access token for gapi client
+                        gapi.client.setToken({access_token: response.access_token});
+                        this.accessToken = response.access_token;
+                        resolve(response);
+                    },
+                    error_callback: (error) => {
+                        reject(new Error('Authentication error: ' + error.type));
+                    }
+                });
+
+                this.setProcessingState(true, 'Please complete Google authentication...');
+                
+                // Add a slight delay to ensure DOM is ready
+                setTimeout(() => {
+                    try {
+                        tokenClient.requestAccessToken({prompt: 'consent'});
+                    } catch (error) {
+                        reject(new Error('Failed to initiate authentication: ' + error.message));
+                    }
+                }, 100);
+            });
+
+            // Update sync metadata to track delta sync
+            const syncTimeRange = this.db.calculateSyncTimeRange();
+            this.setProcessingState(true, `Searching emails since ${syncTimeRange.toLocaleDateString()}...`);
+
+            // Fetch and process Gmail messages
+            await this.fetchJiraTicketsFromGmail();
+            
+            // Always update sync metadata - we performed a sync regardless of results
+            const syncTime = new Date().toISOString();
+            this.db.updateSyncMeta({
+                lastJiraSync: syncTime,
+                lastSuccessfulSync: syncTime
+            });
+            
+            // If we found tickets, automatically add them
+            if (this.discoveredJiraTickets.length > 0) {
+                this.setProcessingState(true, 'Processing JIRA tickets...');
+                const result = await this.autoAddAllJiraTickets();
+                
+                // Update task processing counts
+                this.db.updateSyncMeta({
+                    totalTasksProcessed: this.db.getSyncMeta().totalTasksProcessed + result.totalProcessed
+                });
+                
+                // Show success message
+                this.setProcessingState(false, `✅ Added ${result.addedTasks.length} JIRA tasks to Uncategorized bucket`);
+            } else {
+                this.setProcessingState(false, 'No new JIRA tickets found in recent emails');
+            }
+            
+            // Update the last sync time display
+            this.displayLastSyncTime();
+
+        } catch (error) {
+            console.error('JIRA sync error:', error);
+            this.setProcessingState(false, 'Authentication failed. Please try again.');
+        }
+    }
+
+    // Auto-add all discovered JIRA tickets with duplicate resolution
+    async autoAddAllJiraTickets() {
+        const tasksToAdd = this.discoveredJiraTickets.map(ticketData => ({
+            title: ticketData.subject.replace(/^(Re:|Fwd?:|\[.*?\])\s*/gi, '').trim(),
+            source: 'jira',
+            origin: 'jira', 
+            jiraTicket: ticketData.ticket,
+            quadrant: 'uncategorized',
+            priority: 'medium',
+            syncOriginTimestamp: ticketData.date
+        }));
+
+        // Use database batch add with duplicate resolution
+        const result = this.db.addTasksBatch(tasksToAdd);
+        
+        // Update UI
+        this.renderDashboard();
+        this.updateStats();
+
+        // Note: Sync metadata is now updated in showJiraSync() for all syncs
+        
+        return result;
+    }
+
+    // Set processing state for UI - disable buttons and show status
+    setProcessingState(isProcessing, message = '') {
+        const syncButton = document.querySelector('[onclick="showJiraSync()"]');
+        const allButtons = document.querySelectorAll('button, .nav-btn');
+        const statusArea = document.getElementById('processingStatus') || this.createProcessingStatusArea();
+
+        if (isProcessing) {
+            // Disable all buttons
+            allButtons.forEach(btn => {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                btn.style.cursor = 'not-allowed';
+            });
+            
+            // Update sync button text and show spinner
+            if (syncButton) {
+                syncButton.innerHTML = `<span class="spinner"></span> ${message}`;
+                syncButton.style.background = '#6c757d';
+            }
+
+            // Show status message
+            statusArea.style.display = 'block';
+            statusArea.textContent = message;
+            statusArea.className = 'processing-status active';
+
+        } else {
+            // Re-enable all buttons
+            allButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            });
+
+            // Restore sync button with last sync time
+            if (syncButton) {
+                this.displayLastSyncTime(); // This will update the button text with sync time
+                syncButton.style.background = '#17a2b8';
+            }
+
+            // Show final message briefly, then hide
+            if (message) {
+                statusArea.textContent = message;
+                statusArea.className = message.includes('✅') ? 'processing-status success' : 'processing-status error';
+                setTimeout(() => {
+                    statusArea.style.display = 'none';
+                }, 3000);
+            } else {
+                statusArea.style.display = 'none';
+            }
+        }
+    }
+
+    // Display last sync time
+    displayLastSyncTime() {
+        const syncMeta = this.db.getSyncMeta();
+        const syncButton = document.querySelector('[onclick="showJiraSync()"]');
+        
+        if (!syncMeta || !syncMeta.lastJiraSync) {
+            // Never synced
+            this.updateSyncButtonText('📧 Sync JIRA from Gmail (Never synced)');
+            return;
+        }
+        
+        const lastSync = new Date(syncMeta.lastJiraSync);
+        const now = new Date();
+        const diffMs = now - lastSync;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        let timeAgo = '';
+        if (diffMins < 1) {
+            timeAgo = 'just now';
+        } else if (diffMins < 60) {
+            timeAgo = `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+        } else if (diffHours < 24) {
+            timeAgo = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+        } else {
+            timeAgo = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+        }
+        
+        // Update button text with last sync info
+        this.updateSyncButtonText(`📧 Sync JIRA from Gmail (Last: ${timeAgo})`);
+        
+        // Also log to console for debugging
+        console.log(`Last JIRA sync: ${lastSync.toLocaleString()} (${timeAgo})`);
+        if (syncMeta.duplicatesResolved > 0) {
+            console.log(`Total duplicates resolved: ${syncMeta.duplicatesResolved}`);
+        }
+        if (syncMeta.totalTasksProcessed > 0) {
+            console.log(`Total tasks processed: ${syncMeta.totalTasksProcessed}`);
+        }
+    }
+    
+    // Update sync button text
+    updateSyncButtonText(text) {
+        const syncButton = document.querySelector('[onclick="showJiraSync()"]');
+        if (syncButton && !syncButton.disabled) {
+            syncButton.innerHTML = text;
+        }
+    }
+
+    // Create processing status area if it doesn't exist
+    createProcessingStatusArea() {
+        let statusArea = document.getElementById('processingStatus');
+        if (!statusArea) {
+            statusArea = document.createElement('div');
+            statusArea.id = 'processingStatus';
+            statusArea.className = 'processing-status';
+            
+            // Insert after navigation - try multiple selectors
+            const navigation = document.querySelector('.nav-buttons') || 
+                             document.querySelector('.navigation') ||
+                             document.querySelector('header') ||
+                             document.body.firstElementChild;
+            
+            if (navigation && navigation.parentNode) {
+                navigation.parentNode.insertBefore(statusArea, navigation.nextSibling);
+            } else {
+                // Fallback: add to body
+                document.body.insertBefore(statusArea, document.body.firstChild);
+            }
+        }
+        return statusArea;
     }
 
     closeJiraModal() {
@@ -714,7 +944,7 @@ class PlanningBuddyApp {
 
     // Utility Functions
     getTasksByQuadrant(quadrant) {
-        return this.tasks.filter(t => t.quadrant === quadrant);
+        return this.db.getTasksByQuadrant(quadrant);
     }
 
     generateId() {
@@ -741,3 +971,44 @@ window.startWeeklyPlanning = () => app.startWeeklyPlanning();
 window.showJiraSync = () => app.showJiraSync();
 window.showBrainDump = () => app.showBrainDump();
 window.showArchive = () => app.showArchive();
+
+// Utility function to check last sync details
+window.checkLastSync = function() {
+    const syncMeta = window.planningBuddyDB.getSyncMeta();
+    if (!syncMeta || !syncMeta.lastJiraSync) {
+        console.log('❌ JIRA has never been synced with Gmail');
+        return;
+    }
+    
+    const lastSync = new Date(syncMeta.lastJiraSync);
+    const now = new Date();
+    const diffMs = now - lastSync;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    console.log('📧 JIRA Sync Details:');
+    console.log('====================');
+    console.log(`Last Sync: ${lastSync.toLocaleString()}`);
+    
+    if (diffMins < 60) {
+        console.log(`Time Ago: ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`);
+    } else if (diffHours < 24) {
+        console.log(`Time Ago: ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`);
+    } else {
+        console.log(`Time Ago: ${diffDays} day${diffDays !== 1 ? 's' : ''} ago`);
+    }
+    
+    console.log(`Total Tasks Processed: ${syncMeta.totalTasksProcessed || 0}`);
+    console.log(`Duplicates Resolved: ${syncMeta.duplicatesResolved || 0}`);
+    
+    if (syncMeta.lastSyncError) {
+        console.log(`⚠️ Last Error: ${syncMeta.lastSyncError}`);
+    }
+    
+    // Next sync will look back to
+    const nextSyncRange = window.planningBuddyDB.calculateSyncTimeRange();
+    console.log(`Next sync will check emails from: ${nextSyncRange.toLocaleDateString()}`);
+    
+    return syncMeta;
+};
