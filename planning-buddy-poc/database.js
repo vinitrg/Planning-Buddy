@@ -1,4 +1,5 @@
 // Planning Buddy Database Layer - localStorage Implementation
+// Updated: 2024-12-13 - Fixed editTask integration
 class PlanningBuddyDB {
     constructor() {
         this.STORAGE_KEYS = {

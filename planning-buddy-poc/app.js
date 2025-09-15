@@ -1,4 +1,5 @@
 // Planning Buddy - Core Application Logic
+// Updated: 2024-12-13 14:30 - Fixed editTask database integration
 
 class PlanningBuddyApp {
     constructor() {
@@ -10,10 +11,28 @@ class PlanningBuddyApp {
         this.accessToken = null;
         this.discoveredJiraTickets = [];
         
-        // Initialize database
-        this.db = window.planningBuddyDB;
+        // Initialize database - ensure it exists
+        this.initializeDatabase();
         
         this.init();
+    }
+
+    initializeDatabase() {
+        // Ensure database is available
+        if (window.planningBuddyDB) {
+            this.db = window.planningBuddyDB;
+        } else {
+            console.error('PlanningBuddyDB not found! Make sure database.js is loaded first.');
+            // Try to create it manually as fallback
+            if (typeof PlanningBuddyDB !== 'undefined') {
+                this.db = new PlanningBuddyDB();
+            } else {
+                alert('Database initialization failed. Please refresh the page.');
+                return;
+            }
+        }
+        
+        console.log('Database initialized:', this.db);
     }
 
     init() {
@@ -346,8 +365,22 @@ class PlanningBuddyApp {
     }
 
     editTask(taskId) {
+        console.log('editTask called with ID:', taskId);
+        console.log('Database instance:', this.db);
+        
+        if (!this.db) {
+            console.error('Database not initialized!');
+            alert('Database not ready. Please refresh the page.');
+            return;
+        }
+        
         const task = this.db.getTaskById(taskId);
-        if (!task) return;
+        console.log('Found task:', task);
+        
+        if (!task) {
+            alert('Task not found');
+            return;
+        }
         
         const newTitle = prompt('Edit task title:', task.title);
         if (newTitle && newTitle.trim() !== task.title) {
