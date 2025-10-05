@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Storage Check</title>
+</head>
+<body>
+    <h1>Local Storage Analysis</h1>
+    <div id="results"></div>
+    <script>
+        function checkStorage() {
+            let totalSize = 0;
+            let itemDetails = [];
+            
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    let itemSize = localStorage[key].length;
+                    totalSize += itemSize;
+                    itemDetails.push({
+                        key: key,
+                        size: itemSize,
+                        sizeKB: (itemSize / 1024).toFixed(2)
+                    });
+                }
+            }
+            
+            // Test maximum storage
+            let testKey = 'sizeTest';
+            let testData = 'x';
+            try {
+                while (true) {
+                    testData += testData;
+                    localStorage.setItem(testKey, testData);
+                }
+            } catch (e) {
+                localStorage.removeItem(testKey);
+            }
+            
+            const results = {
+                currentUsage: totalSize,
+                currentUsageKB: (totalSize / 1024).toFixed(2),
+                currentUsageMB: (totalSize / 1024 / 1024).toFixed(2),
+                items: itemDetails.sort((a, b) => b.size - a.size),
+                percentUsed: ((totalSize / (10 * 1024 * 1024)) * 100).toFixed(2)
+            };
+            
+            document.getElementById('results').innerHTML = `
+                <p><strong>Total Used:</strong> ${results.currentUsageMB} MB (${results.percentUsed}% of 10MB limit)</p>
+                <p><strong>Available:</strong> ${(10 - results.currentUsageMB).toFixed(2)} MB</p>
+                <h3>Storage by Item:</h3>
+                <ul>${results.items.map(item => 
+                    `<li>${item.key}: ${item.sizeKB} KB</li>`
+                ).join('')}</ul>
+            `;
+        }
+        checkStorage();
+    </script>
+</body>
+</html>

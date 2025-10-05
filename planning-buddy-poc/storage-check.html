@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Storage Analysis</title>
+</head>
+<body>
+    <h1>Local Storage Analysis</h1>
+    <pre id="results"></pre>
+    <script>
+        let total = 0;
+        for (let key in localStorage) {
+            total += localStorage[key].length + key.length;
+        }
+        document.getElementById('results').innerText = 
+            'Total used: ' + (total/1024).toFixed(2) + ' KB\n' +
+            'Available: ' + ((10240 - total/1024)).toFixed(2) + ' KB\n' +
+            'Possible brain dumps: ' + Math.floor((10240 - total/1024) / 5);
+    </script>
+</body>
+</html>
